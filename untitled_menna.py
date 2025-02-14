@@ -6,6 +6,14 @@ import pandas as pd
 # ✅ Streamlit App Title
 st.title("🛒 AI-Powered E-Commerce Chatbot (Free Version)")
 
+# ✅ Check if the API key is available in secrets
+if "HUGGINGFACE_API_KEY" in st.secrets:
+    HUGGINGFACE_API_KEY = st.secrets["HUGGINGFACE_API_KEY"]
+else:
+    st.error("🚨 Hugging Face API Key is missing! Add it in Streamlit Secrets.")
+    st.stop()
+
+
 # ✅ Load Product Catalog
 json_path = "PRODUCT_catalog.json"  
 if not os.path.exists(json_path):
