@@ -33,13 +33,21 @@ MODEL_NAME = "tiiuae/falcon-7b-instruct"
 def chat_with_bot(query):
     global df_catalog
 
-    # ✅ Search for relevant products
-    search_results = df_catalog[df_catalog.apply(lambda row: query.lower() in str(row).lower(), axis=1)]
-
-    if search_results.empty:
-        extracted_info = "No matching products found in the catalog."
+    # ✅ Handle category-based queries
+    if "category" in query.lower() or "categories" in query.lower():
+        unique_categories = df_catalog["category"].unique()
+        extracted_info = f"Available Categories: {', '.join(unique_categories)}"
+    
+    # ✅ Handle price-based queries
+    elif "under" in query.lower() and any(char.isdigit() for char in query):
+        price_limit = int(''.join(filter(str.isdigit, query)))
+        search_results = df_catalog[df_catalog["price"] <= price_limit]
+        extracted_info = search_results.to_string(index=False) if not search_results.empty else "No products found under this price range."
+    
+    # ✅ Default search (matches any column)
     else:
-        extracted_info = search_results.to_string(index=False)  # Convert relevant data to string
+        search_results = df_catalog[df_catalog.apply(lambda row: query.lower() in str(row).lower(), axis=1)]
+        extracted_info = search_results.to_string(index=False) if not search_results.empty else "No matching products found in the catalog."
 
     # ✅ Format input for AI model
     input_text = f"User: {query} \n Product Info: {extracted_info} \n AI:"
@@ -54,8 +62,7 @@ def chat_with_bot(query):
     if response.status_code == 200:
         return response.json()[0]["generated_text"]
     else:
-        return "Sorry, I couldn't generate a response at the moment."
-
+        return f"AI Error: {response.json()}"
 
 # ✅ Streamlit Chat Interface
 st.subheader("Chat with your AI Assistant")
