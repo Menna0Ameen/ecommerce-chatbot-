@@ -1,51 +1,58 @@
 import streamlit as st
-import torch
+import requests
 import os
 import pandas as pd
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
-from langchain_huggingface import HuggingFacePipeline
 
 # ✅ Streamlit App Title
-st.title("🛒 AI-Powered E-Commerce Chatbot")
+st.title("🛒 AI-Powered E-Commerce Chatbot (Free Version)")
 
 # ✅ Load Product Catalog
-json_path = "PRODUCT_catalog.json"  # Ensure correct file path
+json_path = "PRODUCT_catalog.json"  
 if not os.path.exists(json_path):
     st.error(f"ERROR: The JSON file '{json_path}' is missing.")
     st.stop()
 df_catalog = pd.read_json(json_path)
 
-# ✅ Set up device (Streamlit Cloud does NOT have CUDA)
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-if device != 'cuda':
-    st.warning('CUDA is not available. Running on CPU.')
+# ✅ Hugging Face API Key (Set it in Streamlit Secrets)
+HUGGINGFACE_API_KEY = st.secrets["HUGGINGFACE_API_KEY"]
 
-# ✅ Load a Smaller AI Model Instead of `microsoft/phi-1_5`
-@st.cache_resource()
-def load_model():
-    model_id = "google/flan-t5-small"  # Smaller and faster to load
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_id).to(device)
-    return pipeline("text2text-generation", model=model, tokenizer=tokenizer, max_new_tokens=100)
+# ✅ Choose a Free Model (LLM)
+MODEL_NAME = "mistralai/Mistral-7B-Instruct"
 
-pipe = load_model()
-local_llm = HuggingFacePipeline(pipeline=pipe)
-
-# ✅ Streamlit Session State for Chat History
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-# ✅ Chatbot Function
+# ✅ Function to Call Hugging Face API
 def chat_with_bot(query):
     global df_catalog
 
-    # ✅ Step 1: Retrieve relevant information from JSON
+    # ✅ Retrieve relevant information from JSON
     search_results = df_catalog[df_catalog.apply(lambda row: query.lower() in str(row).lower(), axis=1)]
+    
+    extracted_info = search_results.to_string(index=False) if not search_results.empty else "No relevant products found."
 
-    if search_results.empty:
-        extracted_info = "I'm sorry, I couldn't find relevant information in the product catalog."
+    # ✅ Send query to Hugging Face API
+    response = requests.post(
+        f"https://api-inference.huggingface.co/models/{MODEL_NAME}",
+        headers={"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"},
+        json={"inputs": f"User: {query} \n Product Info: {extracted_info} \n AI:"}
+    )
+
+    # ✅ Extract response
+    if response.status_code == 200:
+        return response.json()[0]["generated_text"]
     else:
-        extracted_info = search_results.to_string(index=False)  # Convert relevant data to string
+        return "Sorry, I couldn't generate a response at the moment."
 
-    # ✅ Step 2: Format input for LLM
-    formatted_history = " ".join(st.session_state.chat_history[-5:])  # Keep last 5 messages
+# ✅ Streamlit Chat Interface
+st.subheader("Chat with your AI Assistant")
+user_query = st.text_input("Ask me anything about our products:")
+
+if st.button("Send"):
+    if user_query:
+        response = chat_with_bot(user_query)
+        st.write(f"**AI:** {response}")
+
+# ✅ Display Chat History
+st.subheader("Chat History")
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+for msg in st.session_state.chat_history:
+    st.write(msg)
