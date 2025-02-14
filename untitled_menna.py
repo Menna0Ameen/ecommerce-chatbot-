@@ -25,7 +25,7 @@ df_catalog = pd.read_json(json_path)
 HUGGINGFACE_API_KEY = st.secrets["HUGGINGFACE_API_KEY"]
 
 # ✅ Choose a Free Model (LLM)
-MODEL_NAME = "mistralai/Mistral-7B-Instruct"
+MODEL_NAME = "tiiuae/falcon-7b-instruct"
 
 # ✅ Function to Call Hugging Face API
 def chat_with_bot(query):
