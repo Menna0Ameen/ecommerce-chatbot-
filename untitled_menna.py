@@ -13,13 +13,15 @@ else:
     st.error("🚨 Hugging Face API Key is missing! Add it in Streamlit Secrets.")
     st.stop()
 
-
 # ✅ Load Product Catalog
 json_path = "PRODUCT_catalog.json"  
 if not os.path.exists(json_path):
     st.error(f"ERROR: The JSON file '{json_path}' is missing.")
     st.stop()
 df_catalog = pd.read_json(json_path)
+
+# ✅ Debug: Print loaded JSON data
+st.write("✅ Loaded Product Catalog:", df_catalog.head())
 
 # ✅ Hugging Face API Key (Set it in Streamlit Secrets)
 HUGGINGFACE_API_KEY = st.secrets["HUGGINGFACE_API_KEY"]
@@ -31,23 +33,29 @@ MODEL_NAME = "tiiuae/falcon-7b-instruct"
 def chat_with_bot(query):
     global df_catalog
 
-    # ✅ Retrieve relevant information from JSON
+    # ✅ Search for relevant products
     search_results = df_catalog[df_catalog.apply(lambda row: query.lower() in str(row).lower(), axis=1)]
-    
-    extracted_info = search_results.to_string(index=False) if not search_results.empty else "No relevant products found."
 
-    # ✅ Send query to Hugging Face API
+    if search_results.empty:
+        extracted_info = "No matching products found in the catalog."
+    else:
+        extracted_info = search_results.to_string(index=False)  # Convert relevant data to string
+
+    # ✅ Format input for AI model
+    input_text = f"User: {query} \n Product Info: {extracted_info} \n AI:"
+
+    # ✅ Generate AI response
     response = requests.post(
         f"https://api-inference.huggingface.co/models/{MODEL_NAME}",
         headers={"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"},
-        json={"inputs": f"User: {query} \n Product Info: {extracted_info} \n AI:"}
+        json={"inputs": input_text}
     )
 
-    # ✅ Extract response
     if response.status_code == 200:
         return response.json()[0]["generated_text"]
     else:
         return "Sorry, I couldn't generate a response at the moment."
+
 
 # ✅ Streamlit Chat Interface
 st.subheader("Chat with your AI Assistant")
