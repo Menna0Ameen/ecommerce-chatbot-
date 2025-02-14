@@ -28,41 +28,51 @@ HUGGINGFACE_API_KEY = st.secrets["HUGGINGFACE_API_KEY"]
 
 # ✅ Choose a Free Model (LLM)
 MODEL_NAME = "tiiuae/falcon-7b-instruct"
-
-# ✅ Function to Call Hugging Face API
+#chatfunction
 def chat_with_bot(query):
     global df_catalog
+
+    # ✅ Limit chat history to last 3 messages (to reduce token size)
+    history_limit = 3
+    recent_history = " ".join(st.session_state.chat_history[-history_limit:])
 
     # ✅ Handle category-based queries
     if "category" in query.lower() or "categories" in query.lower():
         unique_categories = df_catalog["category"].unique()
         extracted_info = f"Available Categories: {', '.join(unique_categories)}"
-    
+
     # ✅ Handle price-based queries
     elif "under" in query.lower() and any(char.isdigit() for char in query):
         price_limit = int(''.join(filter(str.isdigit, query)))
         search_results = df_catalog[df_catalog["price"] <= price_limit]
         extracted_info = search_results.to_string(index=False) if not search_results.empty else "No products found under this price range."
-    
+
     # ✅ Default search (matches any column)
     else:
         search_results = df_catalog[df_catalog.apply(lambda row: query.lower() in str(row).lower(), axis=1)]
         extracted_info = search_results.to_string(index=False) if not search_results.empty else "No matching products found in the catalog."
 
+    # ✅ Limit product info length to 1000 characters to avoid token overflow
+    extracted_info = extracted_info[:1000]
+
     # ✅ Format input for AI model
-    input_text = f"User: {query} \n Product Info: {extracted_info} \n AI:"
+    input_text = f"{recent_history} User: {query} \n Product Info: {extracted_info} \n AI:"
+
+    # ✅ Trim input if it's too long (keep within 6000 characters)
+    input_text = input_text[:6000]
 
     # ✅ Generate AI response
     response = requests.post(
         f"https://api-inference.huggingface.co/models/{MODEL_NAME}",
         headers={"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"},
-        json={"inputs": input_text}
+        json={"inputs": input_text, "max_new_tokens": 200}  # Limit response length
     )
 
     if response.status_code == 200:
         return response.json()[0]["generated_text"]
     else:
         return f"AI Error: {response.json()}"
+
 
 # ✅ Streamlit Chat Interface
 st.subheader("Chat with your AI Assistant")
